@@ -80,6 +80,11 @@
             <argument>%lexik_jwt_authentication.encoder.encryption_engine%</argument>
             <argument>%lexik_jwt_authentication.encoder.signature_algorithm%</argument>
         </service>
+        <!-- JsonWebToken Authenticator -->
+        <service id="lexik_jwt_authentication.security.guard.jwt_authenticator" class="Lexik\Bundle\JWTAuthenticationBundle\Security\Guard\JWTGuardAuthenticator">
+            <argument type="service" id="lexik_jwt_authentication.encoder"/>
+            <argument type="service" id="event_dispatcher"/>
+        </service>
     </services>
 
 </container>
