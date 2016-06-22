@@ -16,11 +16,11 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
+use Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\TokenExtractorInterface;
 
 /**
  * JsonWebToken Authenticator (Symfony Guard implementation).
  *
- * Thank's Ryan Weaver (@weaverryan) for having showed us the way after introduced the component.
  * Usage:
  *
  * <code>
@@ -43,12 +43,14 @@ use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
  *     # ...
  * </code>
  *
+ * Thanks Ryan Weaver (@weaverryan) for having shown us the way after introduced the component.
+ *
  * @see http://knpuniversity.com/screencast/symfony-rest4/jwt-guard-authenticator
  *
  * @author Nicolas Cabot <n.cabot@lexik.fr>
  * @author Robin Chalas <robin.chalas@gmail.com>
  */
-class JWTGuardAuthenticator extends AbstractGuardAuthenticator
+class JWTTokenAuthenticator extends AbstractGuardAuthenticator
 {
     /**
      * @var JWTEncoderInterface
@@ -59,6 +61,11 @@ class JWTGuardAuthenticator extends AbstractGuardAuthenticator
      * @var EventDispatcherInterface
      */
     protected $dispatcher;
+
+    /**
+     * @var TokenExtractorInterface[]
+     */
+    protected $tokenExtractors = [];
 
     /**
      * @param JWTEncoderInterface $encoder
@@ -82,9 +89,7 @@ class JWTGuardAuthenticator extends AbstractGuardAuthenticator
      */
     public function getCredentials(Request $request)
     {
-        $extractor = new AuthorizationHeaderTokenExtractor('Bearer', 'Authorization');
-
-        if (false === ($jsonWebToken = $extractor->extract($request))) {
+        if (false === ($jsonWebToken = $this->extractToken($request))) {
             return;
         }
 
@@ -145,6 +150,27 @@ class JWTGuardAuthenticator extends AbstractGuardAuthenticator
      */
     public function supportsRememberMe()
     {
+        return false;
+    }
+
+    public function addTokenExtractor(TokenExtractorInterface $extractor)
+    {
+        $this->tokenExtractors[] = $extractor;
+    }
+
+    /**
+     * @param Request $request
+     *
+     * @return bool|string
+     */
+    protected function extractToken(Request $request)
+    {
+        foreach ($this->tokenExtractors as $extractor) {
+            if (($token = $extractor->extract($request))) {
+                return $token;
+            }
+        }
+
         return false;
     }
 
