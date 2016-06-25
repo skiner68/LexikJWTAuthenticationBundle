@@ -2,8 +2,8 @@
 
 namespace Lexik\Bundle\JWTAuthenticationBundle\DependencyInjection\Security\Factory;
 
-use Symfony\Component\Config\Definition\Builder\NodeDefinition;
 use Symfony\Bundle\SecurityBundle\DependencyInjection\Security\Factory\GuardAuthenticationFactory;
+use Symfony\Component\Config\Definition\Builder\NodeDefinition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\DefinitionDecorator;
 use Symfony\Component\DependencyInjection\Reference;
@@ -23,7 +23,7 @@ class JWTGuardAuthenticationFactory extends GuardAuthenticationFactory
     public function create(ContainerBuilder $container, $id, $config, $userProvider, $defaultEntryPoint)
     {
         $jwtAuthenticatorId = 'security.guard.jwt_authenticator.'.$id;
-        $jwtAuthenticator = $container->setDefinition(
+        $jwtAuthenticator   = $container->setDefinition(
             $jwtAuthenticatorId,
             new DefinitionDecorator('lexik_jwt_authentication.security.guard.jwt_authenticator')
         );
@@ -35,7 +35,7 @@ class JWTGuardAuthenticationFactory extends GuardAuthenticationFactory
                 ->replaceArgument(0, $config['authorization_header']['prefix'])
                 ->replaceArgument(1, $config['authorization_header']['name']);
 
-                $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($authorizationHeaderExtractorId)]);
+            $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($authorizationHeaderExtractorId)]);
         }
 
         if ($config['query_parameter']['enabled']) {
@@ -53,7 +53,7 @@ class JWTGuardAuthenticationFactory extends GuardAuthenticationFactory
                 ->setDefinition($cookieExtractorId, new DefinitionDecorator('lexik_jwt_authentication.extractor.cookie_extractor'))
                 ->replaceArgument(0, $config['cookie']['name']);
 
-                $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($cookieExtractorId)]);
+            $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($cookieExtractorId)]);
         }
 
         $config['authenticators'] = [$jwtAuthenticatorId];
@@ -103,15 +103,6 @@ class JWTGuardAuthenticationFactory extends GuardAuthenticationFactory
                 ->end()
                 ->booleanNode('throw_exceptions')
                     ->defaultFalse()
-                ->end()
-                ->booleanNode('create_entry_point')
-                    ->defaultTrue()
-                ->end()
-                ->scalarNode('authentication_provider')
-                    ->defaultValue('lexik_jwt_authentication.security.authentication.provider')
-                ->end()
-                ->scalarNode('authentication_listener')
-                    ->defaultValue('lexik_jwt_authentication.security.authentication.listener')
                 ->end()
             ->end()
         ;
