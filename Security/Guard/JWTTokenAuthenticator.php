@@ -33,15 +33,6 @@ use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
  * # ...
  * </code>
  *
- * Or if your firewall has only one guard authenticator, use:
- *
- * <code>
- * firewalls:
- *     api:
- *         lexik_jwt_guard: ~
- *     # ...
- * </code>
- *
  * Thanks Ryan Weaver (@weaverryan) for having shown us the way after introduced the component.
  *
  * @see http://knpuniversity.com/screencast/symfony-rest4/jwt-guard-authenticator
@@ -54,17 +45,17 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     /**
      * @var JWTEncoderInterface
      */
-    protected $encoder;
+    private $encoder;
 
     /**
      * @var EventDispatcherInterface
      */
-    protected $dispatcher;
+    private $dispatcher;
 
     /**
      * @var TokenExtractorInterface[]
      */
-    protected $tokenExtractors = [];
+    private $tokenExtractors = [];
 
     /**
      * @param JWTEncoderInterface $encoder
@@ -88,7 +79,7 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
      */
     public function getCredentials(Request $request)
     {
-        if (false === ($jsonWebToken = $this->extractToken($request))) {
+        if (false === ($jsonWebToken = $this->getTokenFromRequest($request))) {
             return;
         }
 
@@ -162,10 +153,10 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
      *
      * @return bool|string
      */
-    protected function extractToken(Request $request)
+    private function getTokenFromRequest(Request $request)
     {
         foreach ($this->tokenExtractors as $extractor) {
-            if (($token = $extractor->extract($request))) {
+            if ($token = $extractor->extract($request)) {
                 return $token;
             }
         }
