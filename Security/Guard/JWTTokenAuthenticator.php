@@ -5,14 +5,17 @@ namespace Lexik\Bundle\JWTAuthenticationBundle\Security\Guard;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTAuthenticatedEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Events;
+use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTAuthenticationException;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailure\JWTDecodeFailureException;
 use Lexik\Bundle\JWTAuthenticationBundle\Response\JWTAuthenticationFailureResponse;
 use Lexik\Bundle\JWTAuthenticationBundle\Security\Authentication\Token\JWTUserToken;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\TokenExtractorInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\Security\Core\Exception\UsernameNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
@@ -43,14 +46,19 @@ use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
 class JWTTokenAuthenticator extends AbstractGuardAuthenticator
 {
     /**
-     * @var JWTEncoderInterface
+     * @var JWTManagerInterface
      */
-    private $encoder;
+    private $jwtManager;
 
     /**
      * @var EventDispatcherInterface
      */
     private $dispatcher;
+
+    /**
+     * @var string
+     */
+    private $userIdentityField;
 
     /**
      * @var TokenExtractorInterface[]
@@ -60,10 +68,11 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     /**
      * @param JWTEncoderInterface $encoder
      */
-    public function __construct(JWTEncoderInterface $encoder, EventDispatcherInterface $dispatcher)
+    public function __construct(JWTManagerInterface $jwtManager, EventDispatcherInterface $dispatcher, $userIdentityField = 'username')
     {
-        $this->encoder    = $encoder;
-        $this->dispatcher = $dispatcher;
+        $this->jwtManager        = $jwtManager;
+        $this->dispatcher        = $dispatcher;
+        $this->userIdentityField = $userIdentityField;
     }
 
     /**
@@ -83,27 +92,41 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
             return;
         }
 
-        return $jsonWebToken;
+        $beforeAuthToken = new JWTUserToken();
+        $beforeAuthToken->setRawToken($jsonWebToken);
+
+        return $beforeAuthToken;
     }
 
     /**
+     * Loads an user from a JWT Token.
+     * 
      * {@inheritdoc}
+     *
+     * @throws JWTAuthenticationException If the token received cannot be decoded
+     * @throws JWTAuthenticationException If an user cannot be loaded from the decoded token
      */
-    public function getUser($token, UserProviderInterface $userProvider)
+    public function getUser($beforeAuthToken, UserProviderInterface $userProvider)
     {
         try {
-            if (!$payload = $this->encoder->decode($token)) {
-                throw $this->createAuthenticationException();
+            if (!$payload = $this->jwtManager->decode($beforeAuthToken)) {
+                throw JWTAuthenticationException::invalidToken();
             }
         } catch (JWTDecodeFailureException $e) {
-            throw $this->createAuthenticationException($e);
+            throw JWTAuthenticationException::invalidToken($e);
         }
 
-        $user = $userProvider->loadUserByUsername($payload['username']); // TODO: replace 'username' by userIdentityField
+        $identity = $this->getUserIdentityFromPayload($payload);
+
+        try {
+            $user = $userProvider->loadUserByUsername($identity);
+        } catch (UsernameNotFoundException $e) {
+            throw JWTAuthenticationException::invalidUser($identity, $this->userIdentityField);
+        }
 
         $authToken = new JWTUserToken($user->getRoles());
         $authToken->setUser($user);
-        $authToken->setRawToken($token);
+        $authToken->setRawToken($beforeAuthToken->getCredentials());
 
         $event = new JWTAuthenticatedEvent($payload, $authToken);
         $this->dispatcher->dispatch(Events::JWT_AUTHENTICATED, $event);
@@ -165,14 +188,22 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     }
 
     /**
-     * @param \Exception $previous
+     * Returns the user identity from a given payload.
      *
-     * @return AuthenticationException
+     * @param array $payload
+     *
+     * @return string
+     *
+     * @throws JWTAuthenticationException If userIdentityField cannot be found as key of the payload
      */
-    private function createAuthenticationException(JWTDecodeFailureException $previous = null)
+    private function getUserIdentityFromPayload(array $payload)
     {
-        $message = (null === $previous) ? 'Invalid JWT Token' : $previous->getMessage();
+        if (isset($payload[$this->userIdentityField])) {
+            return $payload[$this->userIdentityField];
+        }
 
-        return new AuthenticationException($message, 401, $previous);
+        throw JWTAuthenticationException::invalidPayload(
+            sprintf('Unable to find a key corresponding to the configured user_identity_field ("%s") in the token payload')
+        );
     }
 }

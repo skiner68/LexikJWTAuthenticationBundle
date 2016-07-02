@@ -15,9 +15,6 @@
             <argument type="service" id="event_dispatcher"/>
             <argument type="service" id="request_stack"/>
             <argument>%lexik_jwt_authentication.token_ttl%</argument>
-            <call method="setUserIdentityField">
-                <argument>%lexik_jwt_authentication.user_identity_field%</argument>
-            </call>
         </service>
         <!-- JWT Authentication response interceptor -->
         <service id="lexik_jwt_authentication.handler.authentication_success" class="Lexik\Bundle\JWTAuthenticationBundle\Security\Http\Authentication\AuthenticationSuccessHandler">
@@ -82,8 +79,9 @@
         </service>
         <!-- JsonWebToken Authenticator -->
         <service id="lexik_jwt_authentication.security.guard.jwt_token_authenticator" class="Lexik\Bundle\JWTAuthenticationBundle\Security\Guard\JWTTokenAuthenticator">
-            <argument type="service" id="lexik_jwt_authentication.encoder"/>
+            <argument type="service" id="lexik_jwt_authentication.jwt_manager"/>
             <argument type="service" id="event_dispatcher"/>
+            <argument>%lexik_jwt_authentication.user_identity_field%</argument>
         </service>
     </services>
 
