@@ -14,11 +14,11 @@ class JWTAuthenticationException extends AuthenticationException
 {
     /**
      * Returns an AuthenticationException in case of invalid token.
-     * 
+     *
      * To be used if the token cannot be properly decoded.
-     * 
+     *
      * @param JWTDecodeFailureException|null $previous
-     * 
+     *
      * @return JWTAuthenticationException
      */
     public static function invalidToken(JWTDecodeFailureException $previous = null)
@@ -28,28 +28,28 @@ class JWTAuthenticationException extends AuthenticationException
 
     /**
      * Returns an AuthenticationException in case of invalid user.
-     * 
-     * To be used if no user can be loaded from the identity retrieved from 
+     *
+     * To be used if no user can be loaded from the identity retrieved from
      * the decoded token's payload.
-     * 
+     *
      * @param string|null $message
-     * 
+     *
      * @return JWTAuthenticationException
      */
     public static function invalidUser($identity, $identityField)
     {
         return new self(
-            sprintf('Unable to load a valid user with %s "%s". Did you correctly set the "lexik_jwt_authentication.user_identity_field" config option?', $identityField, $identity)
+            sprintf('Unable to load a valid user with %s "%s". If the user identity has been changed, you must renew the token. Otherwise, verify that the "lexik_jwt_authentication.user_identity_field" config option is correctly set. ', $identityField, $identity)
         );
     }
 
     /**
      * Returns an AuthenticationException in case of invalid payload.
-     * 
+     *
      * To be used if a key in missing in the payload or contains an unexpected value.
-     * 
+     *
      * @param string|null $message
-     * 
+     *
      * @return JWTAuthenticationException
      */
     public static function invalidPayload($message = 'Invalid payload')

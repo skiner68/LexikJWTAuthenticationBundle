@@ -56,6 +56,10 @@
                 <argument type="service" id="event_dispatcher"/>
             </call>
         </service>
+        <!-- Chain Token Extractor -->
+        <service id="lexik_jwt_authentication.extractor.chain_extractor" class="Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\ChainTokenExtractor" public="false">
+            <argument type="collection" /> <!-- The configured extractors (TokenExtractorInterface instances) -->
+        </service>
         <!-- Authorization Header Token Extractor -->
         <service id="lexik_jwt_authentication.extractor.authorization_header_extractor" class="Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\AuthorizationHeaderTokenExtractor" public="false">
             <argument /> <!-- Header Value Prefix -->
@@ -81,6 +85,7 @@
         <service id="lexik_jwt_authentication.security.guard.jwt_token_authenticator" class="Lexik\Bundle\JWTAuthenticationBundle\Security\Guard\JWTTokenAuthenticator">
             <argument type="service" id="lexik_jwt_authentication.jwt_manager"/>
             <argument type="service" id="event_dispatcher"/>
+            <argument type="service" id="lexik_jwt_authentication.extractor.chain_extractor"/>
             <argument>%lexik_jwt_authentication.user_identity_field%</argument>
         </service>
     </services>

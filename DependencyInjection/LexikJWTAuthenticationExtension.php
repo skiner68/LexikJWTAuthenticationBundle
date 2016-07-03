@@ -41,39 +41,49 @@ class LexikJWTAuthenticationExtension extends Extension
         $container->setParameter('lexik_jwt_authentication.encoder.signature_algorithm', $encoderConfig['signature_algorithm']);
         $container->setParameter('lexik_jwt_authentication.encoder.encryption_engine', $encoderConfig['encryption_engine']);
 
-        // JWTTokenAuthenticator (Guard)
-        $jwtAuthenticatorId = 'lexik_jwt_authentication.security.guard.jwt_token_authenticator';
-        $jwtAuthenticator   = $container->getDefinition($jwtAuthenticatorId);
-        $extractorsConfig   = $config['token_extractors'];
+        $this->createChainTokenExtractor($container, $config['token_extractors']);
 
-        if ($extractorsConfig['authorization_header']['enabled']) {
+        $container->setAlias(
+            'lexik_jwt_authentication.jwt_token_authenticator',
+            'lexik_jwt_authentication.security.guard.jwt_token_authenticator'
+        );
+    }
+
+    private function createChainTokenExtractor(ContainerBuilder $container, array $tokenExtractorsConfig)
+    {
+        $extractors = [];
+
+        if ($tokenExtractorsConfig['authorization_header']['enabled']) {
             $authorizationHeaderExtractorId = 'lexik_jwt_authentication.extractor.authorization_header_extractor';
             $container
                 ->getDefinition($authorizationHeaderExtractorId)
-                ->replaceArgument(0, $extractorsConfig['authorization_header']['prefix'])
-                ->replaceArgument(1, $extractorsConfig['authorization_header']['name']);
+                ->replaceArgument(0, $tokenExtractorsConfig['authorization_header']['prefix'])
+                ->replaceArgument(1, $tokenExtractorsConfig['authorization_header']['name']);
 
-            $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($authorizationHeaderExtractorId)]);
+            $extractors[] = new Reference($authorizationHeaderExtractorId);
         }
 
-        if ($extractorsConfig['query_parameter']['enabled']) {
+        if ($tokenExtractorsConfig['query_parameter']['enabled']) {
             $queryParameterExtractorId = 'lexik_jwt_authentication.extractor.query_parameter_extractor';
             $container
                 ->getDefinition($queryParameterExtractorId)
-                ->replaceArgument(0, $extractorsConfig['query_parameter']['name']);
+                ->replaceArgument(0, $tokenExtractorsConfig['query_parameter']['name']);
 
-            $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($queryParameterExtractorId)]);
+            $extractors[] = new Reference($queryParameterExtractorId);
         }
 
-        if ($extractorsConfig['cookie']['enabled']) {
+        if ($tokenExtractorsConfig['cookie']['enabled']) {
             $cookieExtractorId = 'lexik_jwt_authentication.extractor.cookie_extractor';
             $container
                 ->getDefinition($cookieExtractorId)
-                ->replaceArgument(0, $extractorsConfig['cookie']['name']);
+                ->replaceArgument(0, $tokenExtractorsConfig['cookie']['name']);
 
-            $jwtAuthenticator->addMethodCall('addTokenExtractor', [new Reference($cookieExtractorId)]);
+            $extractors[] = new Reference($cookieExtractorId);
         }
 
-        $container->setAlias('lexik_jwt_authentication.jwt_token_authenticator', $jwtAuthenticatorId);
+        $chainTokenExtractorId = 'lexik_jwt_authentication.extractor.chain_extractor';
+        $container
+            ->getDefinition($chainTokenExtractorId)
+            ->replaceArgument(0, $extractors);
     }
 }

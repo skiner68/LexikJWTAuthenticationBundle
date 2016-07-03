@@ -8,6 +8,7 @@ use Lexik\Bundle\JWTAuthenticationBundle\Events;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTAuthenticationException;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailure\JWTDecodeFailureException;
 use Lexik\Bundle\JWTAuthenticationBundle\Response\JWTAuthenticationFailureResponse;
+use Lexik\Bundle\JWTAuthenticationBundle\Security\Authentication\Token\BeforeAuthToken;
 use Lexik\Bundle\JWTAuthenticationBundle\Security\Authentication\Token\JWTUserToken;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\TokenExtractorInterface;
@@ -23,20 +24,7 @@ use Symfony\Component\Security\Guard\AbstractGuardAuthenticator;
 /**
  * JsonWebToken Authenticator (Symfony Guard implementation).
  *
- * Usage:
- *
- * <code>
- * // security.yml
- * firewalls:
- *     api:
- *         guard:
- *             authenticators:
- *                 'lexik_jwt_authentication.jwt_authenticator'
- *         # ...
- * # ...
- * </code>
- *
- * Thanks Ryan Weaver (@weaverryan) for having shown us the way after introduced the component.
+ * Thanks @weaverryan for having shown us the way after introduced the component.
  *
  * @see http://knpuniversity.com/screencast/symfony-rest4/jwt-guard-authenticator
  *
@@ -56,22 +44,30 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     private $dispatcher;
 
     /**
+     * @var TokenExtractorInterface
+     */
+    private $tokenExtractor;
+
+    /**
      * @var string
      */
     private $userIdentityField;
 
     /**
-     * @var TokenExtractorInterface[]
+     * @param JWTEncoderInterface      $encoder
+     * @param EventDispatcherInterface $dispatcher
+     * @param TokenExtractorInterface  $tokenExtractor
+     * @param string                   $userIdentityField
      */
-    private $tokenExtractors = [];
-
-    /**
-     * @param JWTEncoderInterface $encoder
-     */
-    public function __construct(JWTManagerInterface $jwtManager, EventDispatcherInterface $dispatcher, $userIdentityField = 'username')
-    {
+    public function __construct(
+        JWTManagerInterface $jwtManager,
+        EventDispatcherInterface $dispatcher,
+        TokenExtractorInterface $tokenExtractor,
+        $userIdentityField
+    ) {
         $this->jwtManager        = $jwtManager;
         $this->dispatcher        = $dispatcher;
+        $this->tokenExtractor    = $tokenExtractor;
         $this->userIdentityField = $userIdentityField;
     }
 
@@ -84,38 +80,48 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     }
 
     /**
+     * Returns a decoded JWT token extracted from a request.
+     * 
      * {@inheritdoc}
+     *
+     * @return BeforeAuthToken
+     *
+     * @throws JWTAuthenticationException If the request token cannot be decoded
      */
     public function getCredentials(Request $request)
     {
-        if (false === ($jsonWebToken = $this->getTokenFromRequest($request))) {
+        if (false === ($jsonWebToken = $this->tokenExtractor->extract($request))) {
+            // Dispatch JWTNotFoundEvent
             return;
         }
 
-        $beforeAuthToken = new JWTUserToken();
-        $beforeAuthToken->setRawToken($jsonWebToken);
+        $beforeAuthToken = new BeforeAuthToken($jsonWebToken);
+
+        try {
+            if (!$payload = $this->jwtManager->decode($beforeAuthToken)) {
+                throw JWTAuthenticationException::invalidToken();
+            }
+
+            $beforeAuthToken->setPayload($payload);
+        } catch (JWTDecodeFailureException $e) {
+            throw JWTAuthenticationException::invalidToken($e);
+        }
 
         return $beforeAuthToken;
     }
 
     /**
-     * Loads an user from a JWT Token.
-     * 
+     * Returns an user object loaded from a JWT token.
+     *
      * {@inheritdoc}
      *
-     * @throws JWTAuthenticationException If the token received cannot be decoded
-     * @throws JWTAuthenticationException If an user cannot be loaded from the decoded token
+     * @param BeforeAuthToken Implementation of the (Security) TokenInterface
+     *
+     * @throws JWTAuthenticationException If no user can be loaded from the decoded token
      */
-    public function getUser($beforeAuthToken, UserProviderInterface $userProvider)
+    public function getUser($decodedToken, UserProviderInterface $userProvider)
     {
-        try {
-            if (!$payload = $this->jwtManager->decode($beforeAuthToken)) {
-                throw JWTAuthenticationException::invalidToken();
-            }
-        } catch (JWTDecodeFailureException $e) {
-            throw JWTAuthenticationException::invalidToken($e);
-        }
-
+        $payload  = $decodedToken->getPayload();
         $identity = $this->getUserIdentityFromPayload($payload);
 
         try {
@@ -126,21 +132,16 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
 
         $authToken = new JWTUserToken($user->getRoles());
         $authToken->setUser($user);
-        $authToken->setRawToken($beforeAuthToken->getCredentials());
+        $authToken->setRawToken($decodedToken->getCredentials());
 
-        $event = new JWTAuthenticatedEvent($payload, $authToken);
-        $this->dispatcher->dispatch(Events::JWT_AUTHENTICATED, $event);
+        $this->dispatcher->dispatch(
+            Events::JWT_AUTHENTICATED,
+            new JWTAuthenticatedEvent($payload, $authToken)
+        );
 
         return $user;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function checkCredentials($credentials, UserInterface $user)
-    {
-        return true;
-    }
 
     /**
      * {@inheritdoc}
@@ -157,33 +158,20 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     {
         return;
     }
+    
+    /**
+     * {@inheritdoc}
+     */
+    public function checkCredentials($credentials, UserInterface $user)
+    {
+        return true;
+    }
 
     /**
      * {@inheritdoc}
      */
     public function supportsRememberMe()
     {
-        return false;
-    }
-
-    public function addTokenExtractor(TokenExtractorInterface $extractor)
-    {
-        $this->tokenExtractors[] = $extractor;
-    }
-
-    /**
-     * @param Request $request
-     *
-     * @return bool|string
-     */
-    private function getTokenFromRequest(Request $request)
-    {
-        foreach ($this->tokenExtractors as $extractor) {
-            if ($token = $extractor->extract($request)) {
-                return $token;
-            }
-        }
-
         return false;
     }
 
@@ -194,9 +182,9 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
      *
      * @return string
      *
-     * @throws JWTAuthenticationException If userIdentityField cannot be found as key of the payload
+     * @throws JWTAuthenticationException If the userIdentityField is not one of the payload keys
      */
-    private function getUserIdentityFromPayload(array $payload)
+    protected function getUserIdentityFromPayload(array $payload)
     {
         if (isset($payload[$this->userIdentityField])) {
             return $payload[$this->userIdentityField];
