@@ -32,7 +32,8 @@ class JWTAuthenticationException extends AuthenticationException
      * To be used if no user can be loaded from the identity retrieved from
      * the decoded token's payload.
      *
-     * @param string|null $message
+     * @param string $identity
+     * @param string $identityField
      *
      * @return JWTAuthenticationException
      */
@@ -48,7 +49,7 @@ class JWTAuthenticationException extends AuthenticationException
      *
      * To be used if a key in missing in the payload or contains an unexpected value.
      *
-     * @param string|null $message
+     * @param string $message
      *
      * @return JWTAuthenticationException
      */

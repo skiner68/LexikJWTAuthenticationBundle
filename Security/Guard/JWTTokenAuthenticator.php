@@ -4,6 +4,9 @@ namespace Lexik\Bundle\JWTAuthenticationBundle\Security\Guard;
 
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTAuthenticatedEvent;
+use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTFailureEventInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTInvalidEvent;
+use Lexik\Bundle\JWTAuthenticationBundle\Event\JWTNotFoundEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Events;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTAuthenticationException;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailure\JWTDecodeFailureException;
@@ -72,16 +75,8 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public function start(Request $request, AuthenticationException $authException = null)
-    {
-        return new JWTAuthenticationFailureResponse();
-    }
-
-    /**
      * Returns a decoded JWT token extracted from a request.
-     * 
+     *
      * {@inheritdoc}
      *
      * @return BeforeAuthToken
@@ -91,7 +86,6 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     public function getCredentials(Request $request)
     {
         if (false === ($jsonWebToken = $this->tokenExtractor->extract($request))) {
-            // Dispatch JWTNotFoundEvent
             return;
         }
 
@@ -134,21 +128,28 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
         $authToken->setUser($user);
         $authToken->setRawToken($decodedToken->getCredentials());
 
-        $this->dispatcher->dispatch(
-            Events::JWT_AUTHENTICATED,
-            new JWTAuthenticatedEvent($payload, $authToken)
-        );
+        $this->dispatcher->dispatch(Events::JWT_AUTHENTICATED, new JWTAuthenticatedEvent($payload, $authToken));
 
         return $user;
     }
 
-
     /**
      * {@inheritdoc}
+     *
+     * @param JWTFailureEventInterface An event to be dispatched (default JWTInvalidEvent)
      */
-    public function onAuthenticationFailure(Request $request, AuthenticationException $authException)
+    public function onAuthenticationFailure(Request $request, AuthenticationException $authException, JWTFailureEventInterface $event = null)
     {
-        return new JWTAuthenticationFailureResponse($authException->getMessage());
+        $response = new JWTAuthenticationFailureResponse($authException->getMessage());
+
+        if (null === $event) {
+            $event = new JWTInvalidEvent($request, $authException, $response);
+            $this->dispatcher->dispatch(Events::JWT_INVALID, $event);
+        } else {
+            $event->setResponse($response);
+        }
+
+        return $event->getResponse();
     }
 
     /**
@@ -158,7 +159,22 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
     {
         return;
     }
-    
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return JWTAuthenticationFailureResponse
+     */
+    public function start(Request $request, AuthenticationException $authException = null)
+    {
+        $authException = JWTAuthenticationException::invalidToken();
+        $event         = new JWTNotFoundEvent($request, $authException);
+
+        $this->dispatcher->dispatch(Events::JWT_NOT_FOUND, $event);
+
+        return $this->onAuthenticationFailure($request, $authException, $event);
+    }
+
     /**
      * {@inheritdoc}
      */

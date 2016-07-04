@@ -20,7 +20,7 @@ class ChainTokenExtractor implements TokenExtractorInterface
     /**
      * @param TokenExtractorInterface[] $extractors
      */
-    public function __construct($extractors = [])
+    public function __construct(array $extractors = [])
     {
         foreach ($extractors as $extractor) {
             $this->addTokenExtractor($extractor);
