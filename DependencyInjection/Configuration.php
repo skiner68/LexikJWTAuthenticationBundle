@@ -72,7 +72,7 @@ class Configuration implements ConfigurationInterface
     private function getTokenExtractorsNode()
     {
         $builder = new TreeBuilder();
-        $node = $builder->root('token_extractors');
+        $node    = $builder->root('token_extractors');
 
         $node
             ->addDefaultsIfNotSet()
