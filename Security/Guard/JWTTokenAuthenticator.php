@@ -140,13 +140,9 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
      */
     public function onAuthenticationFailure(Request $request, AuthenticationException $authException, JWTFailureEventInterface $event = null)
     {
-        $response = new JWTAuthenticationFailureResponse($authException->getMessage());
-
         if (null === $event) {
-            $event = new JWTInvalidEvent($request, $authException, $response);
+            $event = new JWTInvalidEvent($request, $authException, new JWTAuthenticationFailureResponse($authException->getMessage()));
             $this->dispatcher->dispatch(Events::JWT_INVALID, $event);
-        } else {
-            $event->setResponse($response);
         }
 
         return $event->getResponse();
@@ -167,8 +163,8 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
      */
     public function start(Request $request, AuthenticationException $authException = null)
     {
-        $authException = JWTAuthenticationException::invalidToken();
-        $event         = new JWTNotFoundEvent($request, $authException);
+        $authException = JWTAuthenticationException::tokenNotFound();
+        $event         = new JWTNotFoundEvent($request, $authException, new JWTAuthenticationFailureResponse($authException->getMessage()));
 
         $this->dispatcher->dispatch(Events::JWT_NOT_FOUND, $event);
 
@@ -207,7 +203,7 @@ class JWTTokenAuthenticator extends AbstractGuardAuthenticator
         }
 
         throw JWTAuthenticationException::invalidPayload(
-            sprintf('Unable to find a key corresponding to the configured user_identity_field ("%s") in the token payload')
+            sprintf('Unable to find a key corresponding to the configured user_identity_field ("%s") in the token payload', $this->userIdentityField)
         );
     }
 }
