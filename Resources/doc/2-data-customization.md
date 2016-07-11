@@ -273,7 +273,7 @@ Thanks to this event, you can set a custom response.
 ``` yaml
 # services.yml
 services:
-    acme_api.event.jwt_invalid_listener:
+    acme_api.event.jwt_not_found_listener:
         class: Acme\Bundle\ApiBundle\EventListener\JWTInvalidListener
         tags:
             - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_not_found, method: onJWTNotFound }
